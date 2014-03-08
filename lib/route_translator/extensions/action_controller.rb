@@ -4,7 +4,7 @@ module ActionController
   class Base
     around_filter :set_locale_from_url
 
-    def set_locale_from_url(&block)
+    def set_locale_from_url
       I18n.with_locale(params[RouteTranslator.locale_param_key]) do
         yield
       end
