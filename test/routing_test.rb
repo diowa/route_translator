@@ -18,6 +18,7 @@ class TranslateRoutesTest < ActionController::TestCase
 
   def teardown
     config_force_locale false
+    config_hide_locale false
     config_generate_unlocalized_routes false
     config_default_locale_settings("en")
     config_generate_unnamed_unlocalized_routes false
@@ -54,6 +55,17 @@ class TranslateRoutesTest < ActionController::TestCase
 
     assert_routing '/es/productos/a', :controller => 'products', :action => 'index', :locale => 'es', :non_optional_param => 'a'
     assert_routing '/es/productos/a/b', :controller => 'products', :action => 'index', :locale => 'es', :non_optional_param => 'b', :optional_param => 'a'
+  end
+
+  def test_translations_after_optional_segments
+    draw_routes do
+      localized do
+        get '(/:optional_param)/products', :to => 'products#index'
+      end
+    end
+
+    assert_routing '/es/productos', :controller => 'products', :action => 'index', :locale => 'es'
+    assert_routing '/es/a/productos', :controller => 'products', :action => 'index', :locale => 'es', :optional_param => 'a'
   end
 
   def test_dynamic_segments_dont_get_translated
@@ -396,18 +408,34 @@ class TranslateRoutesTest < ActionController::TestCase
     assert_equal '/es/gente', @routes.url_helpers.people_path
   end
 
-  def test_config_translation_file
+  def test_dont_add_locale_to_routes_if_local_param_present
     config_default_locale_settings 'es'
+    config_force_locale true
 
     draw_routes do
-      localized do
-        root :to => 'people#index'
+      scope 'segment/:locale' do
+        localized do
+          resources :products
+        end
       end
     end
 
-    assert_routing '/', :controller => 'people', :action => 'index', :locale => 'es'
-    assert_routing '/en', :controller => 'people', :action => 'index', :locale => 'en'
-    assert_unrecognized_route '/es', :controller => 'people', :action => 'index', :locale => 'es'
+    assert_routing '/segment/es/productos/product_slug', :controller => 'products', :action => 'show', :locale => 'es', :id => 'product_slug'
+    assert_routing '/segment/en/products/product_slug', :controller => 'products', :action => 'show', :locale => 'en', :id => 'product_slug'
+  end
+
+  def test_config_hide_locale
+    config_default_locale_settings 'en'
+    config_hide_locale true
+
+    draw_routes do
+      localized do
+        resources :people
+      end
+    end
+
+    assert_routing '/gente', :controller => 'people', :action => 'index', :locale => 'es'
+    assert_routing '/people', :controller => 'people', :action => 'index', :locale => 'en'
   end
 
 
@@ -421,5 +449,38 @@ class TranslateRoutesTest < ActionController::TestCase
 
   def test_action_view_gets_locale_suffix_helper
     ActionView::Base.instance_methods.include?('locale_suffix')
+  end
+
+  def test_action_controller_test_case_reads_default_urls
+    test_case_reads_default_urls(ActionController::TestCase)
+  end
+
+  def test_action_view_test_case_reads_default_urls
+    test_case_reads_default_urls(ActionView::TestCase)
+  end
+
+  def test_action_mailer_test_case_reads_default_urls
+    test_case_reads_default_urls(ActionMailer::TestCase)
+  end
+
+  private
+  def test_case_reads_default_urls(klass)
+    config_default_locale_settings 'en'
+
+    draw_routes do
+      localized do
+        resources :person
+      end
+    end
+
+    test_case = klass.new(:respond_to?)
+
+    # Not localized
+    assert test_case.respond_to?(:people_path)
+    assert test_case.respond_to?(:new_person_path)
+    
+    # Localized
+    assert test_case.respond_to?(:people_en_path)
+    assert test_case.respond_to?(:new_person_en_path)
   end
 end

@@ -2,6 +2,9 @@ require 'test/unit'
 require 'minitest/mock'
 require 'minitest/unit'
 
+require 'i18n'
+I18n.enforce_available_locales = true
+
 require "rails"
 require "action_controller/railtie"
 
@@ -39,16 +42,16 @@ module RouteTranslator
       RouteTranslator.config.force_locale = boolean
     end
 
+    def config_hide_locale(boolean)
+      RouteTranslator.config.hide_locale = boolean
+    end
+
     def config_generate_unlocalized_routes(boolean)
       RouteTranslator.config.generate_unlocalized_routes = boolean
     end
 
     def config_generate_unnamed_unlocalized_routes(boolean)
       RouteTranslator.config.generate_unnamed_unlocalized_routes = boolean
-    end
-
-    def config_translation_file (file)
-      RouteTranslator.config.translation_file = file
     end
 
     def path_string(route)

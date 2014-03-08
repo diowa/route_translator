@@ -17,6 +17,11 @@ module RouteTranslator
             __send__("#{old_name}_#{I18n.default_locale.to_s.underscore}_#{suffix}", *args)
           end
         end
+
+        # Including the named routes helpers module
+        [ActionController::TestCase, ActionView::TestCase, ActionMailer::TestCase].each do |klass|
+          klass.__send__(:include, helper_container)
+        end
       end
     end
 
@@ -50,19 +55,20 @@ module RouteTranslator
     # Translates a path and adds the locale prefix.
     def self.translate_path(path, locale)
       new_path = path.dup
-      final_optional_segments = new_path.slice!(/(\(.+\))$/)
-      new_path = new_path.split("/").map{|seg| translate_path_segment(seg, locale)}.join('/')
+      final_optional_segments = new_path.slice!(/(\([^\/]+\))$/)
+      translated_segments = new_path.split("/").select{ |seg| !seg.blank? }.map{|seg| translate_path_segment(seg, locale)}
 
-      # Add locale prefix if it's not the default locale,
+      # if not hiding locale then
+      # add locale prefix if it's not the default locale,
       # or forcing locale to all routes,
       # or already generating actual unlocalized routes
-      if !default_locale?(locale) || RouteTranslator.config.force_locale || RouteTranslator.config.generate_unlocalized_routes || RouteTranslator.config.generate_unnamed_unlocalized_routes
-        new_path = "/#{locale.to_s.downcase}#{new_path}"
+      if !RouteTranslator.config.hide_locale && (!default_locale?(locale) || RouteTranslator.config.force_locale || RouteTranslator.config.generate_unlocalized_routes || RouteTranslator.config.generate_unnamed_unlocalized_routes)
+        if !locale_param_present?(new_path)
+          translated_segments.unshift locale.to_s.downcase
+        end
       end
 
-      new_path = "/" if new_path.blank?
-
-      "#{new_path}#{final_optional_segments}"
+      "/#{translated_segments.join('/')}#{final_optional_segments}".gsub(/\/\(\//, '(/')
     end
 
     def self.translate_name(n, locale)
@@ -79,16 +85,21 @@ module RouteTranslator
     # segment is blank, begins with a ":" (param key) or "*" (wildcard),
     # the segment is returned untouched
     def self.translate_path_segment segment, locale
-      return segment if segment.blank? || segment.starts_with?(":") || segment.starts_with?("*")
-
+      return segment if segment.blank? or segment.starts_with?(":") or segment.starts_with?("(") or segment.starts_with?("*")
+      
+      appended_part = segment.slice!(/(\()$/)
       match = TRANSLATABLE_SEGMENT.match(segment)[1] rescue nil
-
-      (translate_string(match, locale) || segment)
+      
+      (translate_string(match, locale) || segment) + appended_part.to_s
     end
 
     def self.translate_string(str, locale)
       res = I18n.translate(str, :scope => :routes, :locale => locale, :default => str)
       URI.escape(res)
+    end
+
+    def self.locale_param_present?(path)
+      !(path.split('/').detect { |segment| segment.to_s == ":#{RouteTranslator.locale_param_key.to_s}" }.nil?)
     end
   end
 end
