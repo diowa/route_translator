@@ -2,6 +2,7 @@
 
 require 'minitest/autorun'
 require 'minitest/mock'
+require 'byebug'
 
 require 'i18n'
 begin
